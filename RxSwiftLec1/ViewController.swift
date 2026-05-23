@@ -26,165 +26,50 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        testPublisherOperators()
-        fetchNews()
+        setupPublisher()
+        executeVariableWithDelay()
     }
     
     
     
-    
-    
-    func fetchNews() {
-        URLSession.shared.dataTaskPublisher(for: url)
-            .receive(on: DispatchQueue.main)
-            .map { $0.data }
-            .decode(type: [News].self, decoder: JSONDecoder())
-            .mapError({ error -> APIError in
-                switch error {
-                case URLError.cannotFindHost:
-                    return .invalidURL
-                case URLError.notConnectedToInternet:
-                    return .responseError(error: error)
-                default: return .unknown
-                }
-            })
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    print("Finished")
-                case .failure(let error):
-                    print("error : \(error)")
-                }
-            }, receiveValue: { [weak self] news in
-                guard let self = self else { return }
+    func setupPublisher() {
+            let publisher = Just("Hello MAD 46.")
+            
+            publisher
+                .subscribe(on: DispatchQueue.global(qos: .background))
                 
-                print("subscription : \(Thread.isMainThread)")
+                .receive(on: DispatchQueue.main)
                 
-                if let firstNews = news.first {
-                    self.titleLabel.text = firstNews.title
-                    self.authorLabel.text = firstNews.author
+                .sink { [weak self] outputText in
+                    self?.titleLabel.text = outputText
+                    
+                    print("Is Main Thread? \(Thread.isMainThread)")
                 }
-            })
-            .store(in: &cancellables)
-        
-    }
-    
-    func testPublisherOperators(){
-        print("\n--- ReplaceNil , scan Operators ---")
-        [1,2,3,4,5,6,7,nil].publisher
-            .replaceNil(with: 0)
-            .scan(0, +)
-            .sink{
-                print("Chanin total : \($0)")
-            }.store(in: &cancellables)
-        
-        print("\n--- RemoveDublicates, CompactMap, filter Operators ---")
-        ["10", "20", "20" ,"Mona", "30", "Swift"].publisher
-            .removeDuplicates()
-            .compactMap { Int($0)}
-            .filter{$0 > 15}
-            .sink{print("Final: \($0)")}
-            .store(in: &cancellables)
-        
-        print("\n--- Collect(count) Operator ---")
-        [1, 2, 3, 4, 5, 6, 7].publisher
-            .collect(3)
-            .sink { print("Collected Pack: \($0)") }
-            .store(in: &cancellables)
-        
-        
-        print("\n--- Reduce Operator ---")
-        [1, 2, 3, 4].publisher
-            .reduce(0) { runningTotal, currentValue in
-                return runningTotal + currentValue
-            }
-            .sink { print("Final Reduced Total: \($0)") }
-            .store(in: &cancellables)
-        
-        print("\n--- Count Operator ---")
-        [1, 2, 3, 4, 5, 6, 7].publisher
-            .count()
-            .sink { print("Total number : \($0)") }
-            .store(in: &cancellables)
-        
-        print("--- Catch Operator ---")
-        Fail<String, APIError>(error: .networkFailed)
-            .catch { error -> Just<String> in
-                print("Catch caught an error: \(error), replacing with fallback data.")
-                return Just("Offline Data / Cached Data")
-            }
-            .sink(receiveCompletion: { print("Completion: \($0)") },
-                  receiveValue: { print("Value: \($0)") })
-            .store(in: &cancellables)
-        
-        
-        print("\n--- TryCatch Operator ---")
-        Fail<String, APIError>(error: .invalidData)
-            .tryCatch { error -> Just<String> in
-                if case .networkFailed = error {
-                    return Just("Fallback for network")
-                } else {
-                    throw APIError.invalidData
-                }
-            }
-            .sink(receiveCompletion: { print("Completion: \($0)") },
-                  receiveValue: { print("Value: \($0)") })
-            .store(in: &cancellables)
-        
-        
-        print("\n--- Retry Operator ---")
-        let serverRequest = Fail<String, APIError>(error: .networkFailed)
-        
-        serverRequest
-            .retry(2)
-            .catch { _ in Just("Failed after retries") }
-            .sink { print("Value: \($0)") }
-            .store(in: &cancellables)
-        
-        
-        print("\n--- AssertNoFailure Operator ---")
-        Just("Perfect Data")
-            .setFailureType(to: APIError.self)
-            .assertNoFailure("This should never fail! If it does, crash the app.")
-            .sink { print("Value: \($0)") }
-            .store(in: &cancellables)
-    }
-    
-    func testTimeOperators() {
-        
-        let searchSubject = PassthroughSubject<String, Never>()
-        
-        searchSubject
-            .delay(for: .seconds(2), scheduler: DispatchQueue.main)
-            .sink { print(" Delay (after 2 sec): \($0)") }
-            .store(in: &cancellables)
-        
-        searchSubject
-            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
-            .sink { print(" Debounce (waited for pause): \($0)") }
-            .store(in: &cancellables)
-        
-        searchSubject
-            .throttle(for: .seconds(2), scheduler: DispatchQueue.main, latest: true)
-            .sink { print("Throttle (1 per 2 sec): \($0)") }
-            .store(in: &cancellables)
-        
-        let networkSubject = PassthroughSubject<String, APIError>()
-        networkSubject
-            .timeout(.seconds(3), scheduler: DispatchQueue.main, customError: { .networkFailed })
-            .sink(receiveCompletion: { print("Timeout Completion: \($0)") },
-                  receiveValue: { print("Timeout Value: \($0)") })
-            .store(in: &cancellables)
-        
-        
-        searchSubject.send("M")
-        searchSubject.send("Mo")
-        searchSubject.send("Mon")
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            searchSubject.send("Mona")
+                .store(in: &cancellables)
         }
-    }
+    
+    func executeVariableWithDelay() {
+            
+            [1, 2, 3, 4, 5].publisher
+            
+                .flatMap(maxPublishers: .max(1)) { number -> AnyPublisher<Int, Never> in
+                    
+                    let waitTime = Double(number - 1)
+                    
+                    return Just(number)
+                        .delay(for: .seconds(waitTime), scheduler: DispatchQueue.main)
+                        .eraseToAnyPublisher()
+                }
+                .sink { [weak self] value in
+                    self?.authorLabel.text = "\(value)"
+                    
+                    print("Displayed: \(value)")
+                }
+                .store(in: &cancellables)
+        }
+
+    
+    
 }
 struct News : Decodable{
     let author : String
